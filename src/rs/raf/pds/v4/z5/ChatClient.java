@@ -80,6 +80,8 @@ public class ChatClient implements Runnable{
 	private void showChatMessage(ChatMessage chatMessage) {
 	    if (chatMessage.isPrivate()) {
 	        System.out.println("[PRIVATE] " + chatMessage.getUser() + " -> " + chatMessage.getRecipient() + ": " + chatMessage.getTxt());
+	    } else if (chatMessage.isMultiCast) {
+	        System.out.println("[MULTICAST] " + chatMessage.getUser() + " -> " + chatMessage.multiRecipients + ": " + chatMessage.getTxt());
 	    } else {
 	        System.out.println(chatMessage.getUser() + ":" + chatMessage.getTxt());
 	    }
@@ -135,20 +137,37 @@ public class ChatClient implements Runnable{
 	            		client.sendTCP(new WhoRequest());
 	            	}							
 	            	else {
-	            	    if (userInput.startsWith("/pm ")) {
-	            	        String[] parts = userInput.split(" ", 3);
-	            	        if (parts.length >= 3) {
-	            	            String recipient = parts[1];
-	            	            String messageText = parts[2];
-	            	            ChatMessage message = new ChatMessage(userName, messageText, recipient, true);
-	            	            client.sendTCP(message);
-	            	        } else {
-	            	            System.out.println("Unesi privatnu poruku kao: /pm username poruka");
-	            	        }
-	            	    } else {
-	            	        ChatMessage message = new ChatMessage(userName, userInput);
-	            	        client.sendTCP(message);
-	            	    }
+	            		if (userInput.startsWith("/mc ")) {
+	            		    String[] tokens = userInput.split("\\s+");
+	            		    if (tokens.length < 4) {
+	            		        System.out.println("Unesi multicast poruku kao: /mc korisnik1 korisnik2 ... poruka");
+	            		    } else {
+	            		        java.util.List<String> recipients = new java.util.ArrayList<>();
+	            		        recipients.add(tokens[1]);
+	            		        recipients.add(tokens[2]);
+	            		        StringBuilder sb = new StringBuilder();
+	            		        for (int j = 3; j < tokens.length; j++) {
+	            		            if (sb.length() > 0) sb.append(" ");
+	            		            sb.append(tokens[j]);
+	            		        }
+	            		        String messageText = sb.toString();
+	            		        ChatMessage message = new ChatMessage(userName, recipients, messageText);
+	            		        client.sendTCP(message);
+	            		    }
+	            		} else if (userInput.startsWith("/pm ")) {
+	            		    String[] parts = userInput.split(" ", 3);
+	            		    if (parts.length >= 3) {
+	            		        String recipient = parts[1];
+	            		        String messageText = parts[2];
+	            		        ChatMessage message = new ChatMessage(userName, messageText, recipient, true);
+	            		        client.sendTCP(message);
+	            		    } else {
+	            		        System.out.println("Unesi privatnu poruku kao: /pm username poruka");
+	            		    }
+	            		} else {
+	            		    ChatMessage message = new ChatMessage(userName, userInput);
+	            		    client.sendTCP(message);
+	            		}
 	            	}
 	            	
 	            	if (!client.isConnected() && running)

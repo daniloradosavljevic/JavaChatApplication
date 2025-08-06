@@ -61,6 +61,19 @@ public class ChatServer implements Runnable{
 	                    if (senderConn != null && senderConn.isConnected() && senderConn != recipientConn) {
 	                        senderConn.sendTCP(chatMessage);
 	                    }
+	                } else if (chatMessage.isMultiCast) {
+	                    if (chatMessage.multiRecipients != null) {
+	                        for (String recipient : chatMessage.multiRecipients) {
+	                            Connection recipientConn = userConnectionMap.get(recipient);
+	                            if (recipientConn != null && recipientConn.isConnected()) {
+	                                recipientConn.sendTCP(chatMessage);
+	                            }
+	                        }
+	                    }
+	                    Connection senderConn = userConnectionMap.get(chatMessage.getUser());
+	                    if (senderConn != null && senderConn.isConnected() && (chatMessage.multiRecipients == null || !chatMessage.multiRecipients.contains(chatMessage.getUser()))) {
+	                        senderConn.sendTCP(chatMessage);
+	                    }
 	                } else {
 	                    broadcastChatMessage(chatMessage, connection); 
 	                }
@@ -73,14 +86,16 @@ public class ChatServer implements Runnable{
 	                return;
 	            }
 	        }
-			
-			public void disconnected(Connection connection) {
-				String user = connectionUserMap.get(connection);
-				connectionUserMap.remove(connection);
-				userConnectionMap.remove(user);
-				showTextToAll(user+" has disconnected!", connection);
-			}
-		});
+	        
+	        public void disconnected(Connection connection) {
+	            String user = connectionUserMap.get(connection);
+	            connectionUserMap.remove(connection);
+	            if (user != null) {
+	                userConnectionMap.remove(user);
+	                showTextToAll(user + " has disconnected!", connection);
+	            }
+	        }
+	    });
 	}
 	
 	String[] getAllUsers() {

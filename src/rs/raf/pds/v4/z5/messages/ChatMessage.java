@@ -1,4 +1,6 @@
 package rs.raf.pds.v4.z5.messages;
+import java.util.List;
+
 
 public class ChatMessage {
     String user;
@@ -6,7 +8,10 @@ public class ChatMessage {
 
     String recipient; 
     boolean isPrivate;
-
+    
+    public boolean isMultiCast;
+    public List<String> multiRecipients;
+    
     protected ChatMessage() {}
 
     public ChatMessage(String user, String txt) {
@@ -21,6 +26,13 @@ public class ChatMessage {
         this.txt = txt;
         this.recipient = recipient;
         this.isPrivate = isPrivate;
+    }
+    public ChatMessage(String user, List<String> recipients, String txt) {
+        this.user = user;
+        this.multiRecipients = recipients;
+        this.txt = txt;
+        this.isPrivate = false;
+        this.isMultiCast = true;
     }
 
     public String getUser() {
