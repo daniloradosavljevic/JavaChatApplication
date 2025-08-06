@@ -78,7 +78,11 @@ public class ChatClient implements Runnable{
 		});
 	}
 	private void showChatMessage(ChatMessage chatMessage) {
-		System.out.println(chatMessage.getUser()+":"+chatMessage.getTxt());
+	    if (chatMessage.isPrivate()) {
+	        System.out.println("[PRIVATE] " + chatMessage.getUser() + " -> " + chatMessage.getRecipient() + ": " + chatMessage.getTxt());
+	    } else {
+	        System.out.println(chatMessage.getUser() + ":" + chatMessage.getTxt());
+	    }
 	}
 	private void showMessage(String txt) {
 		System.out.println(txt);
@@ -115,7 +119,7 @@ public class ChatClient implements Runnable{
 		
 		try (
 				BufferedReader stdIn = new BufferedReader(
-	                    new InputStreamReader(System.in))	// Za čitanje sa standardnog ulaza - tastature!
+	                    new InputStreamReader(System.in))	
 	        ) {
 					            
 				String userInput;
@@ -123,7 +127,7 @@ public class ChatClient implements Runnable{
 				
 	            while (running) {
 	            	userInput = stdIn.readLine();
-	            	if (userInput == null || "BYE".equalsIgnoreCase(userInput)) // userInput - tekst koji je unet sa tastature!
+	            	if (userInput == null || "BYE".equalsIgnoreCase(userInput))
 	            	{
 	            		running = false;
 	            	}
@@ -131,8 +135,20 @@ public class ChatClient implements Runnable{
 	            		client.sendTCP(new WhoRequest());
 	            	}							
 	            	else {
-	            		ChatMessage message = new ChatMessage(userName, userInput);
-	            		client.sendTCP(message);
+	            	    if (userInput.startsWith("/pm ")) {
+	            	        String[] parts = userInput.split(" ", 3);
+	            	        if (parts.length >= 3) {
+	            	            String recipient = parts[1];
+	            	            String messageText = parts[2];
+	            	            ChatMessage message = new ChatMessage(userName, messageText, recipient, true);
+	            	            client.sendTCP(message);
+	            	        } else {
+	            	            System.out.println("Unesi privatnu poruku kao: /pm username poruka");
+	            	        }
+	            	    } else {
+	            	        ChatMessage message = new ChatMessage(userName, userInput);
+	            	        client.sendTCP(message);
+	            	    }
 	            	}
 	            	
 	            	if (!client.isConnected() && running)

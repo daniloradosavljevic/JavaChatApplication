@@ -34,34 +34,45 @@ public class ChatServer implements Runnable{
 		registerListener();
 	}
 	private void registerListener() {
-		server.addListener(new Listener() {
-			public void received (Connection connection, Object object) {
-				if (object instanceof Login) {
-					Login login = (Login)object;
-					newUserLogged(login, connection);
-					connection.sendTCP(new InfoMessage("Hello "+login.getUserName()));
-					try {
-						Thread.sleep(2000);
-					} catch (InterruptedException e) {
-						// TODO Auto-generated catch block
-						e.printStackTrace();
-					}
-					return;
-				}
-				
-				if (object instanceof ChatMessage) {
-					ChatMessage chatMessage = (ChatMessage)object;
-					System.out.println(chatMessage.getUser()+":"+chatMessage.getTxt());
-					broadcastChatMessage(chatMessage, connection); 
-					return;
-				}
+	    server.addListener(new Listener() {
+	        public void received(Connection connection, Object object) {
+	            if (object instanceof Login) {
+	                Login login = (Login)object;
+	                newUserLogged(login, connection);
+	                connection.sendTCP(new InfoMessage("Hello " + login.getUserName()));
+	                try {
+	                    Thread.sleep(2000);
+	                } catch (InterruptedException e) {
+	                    e.printStackTrace();
+	                }
+	                return;
+	            }
 
-				if (object instanceof WhoRequest) {
-					ListUsers listUsers = new ListUsers(getAllUsers());
-					connection.sendTCP(listUsers);
-					return;
-				}
-			}
+	            if (object instanceof ChatMessage) {
+	                ChatMessage chatMessage = (ChatMessage)object;
+	                System.out.println(chatMessage.getUser() + ":" + chatMessage.getTxt());
+
+	                if (chatMessage.isPrivate()) {
+	                    Connection recipientConn = userConnectionMap.get(chatMessage.getRecipient());
+	                    Connection senderConn = userConnectionMap.get(chatMessage.getUser());
+	                    if (recipientConn != null && recipientConn.isConnected()) {
+	                        recipientConn.sendTCP(chatMessage);
+	                    }
+	                    if (senderConn != null && senderConn.isConnected() && senderConn != recipientConn) {
+	                        senderConn.sendTCP(chatMessage);
+	                    }
+	                } else {
+	                    broadcastChatMessage(chatMessage, connection); 
+	                }
+	                return;
+	            }
+
+	            if (object instanceof WhoRequest) {
+	                ListUsers listUsers = new ListUsers(getAllUsers());
+	                connection.sendTCP(listUsers);
+	                return;
+	            }
+	        }
 			
 			public void disconnected(Connection connection) {
 				String user = connectionUserMap.get(connection);
