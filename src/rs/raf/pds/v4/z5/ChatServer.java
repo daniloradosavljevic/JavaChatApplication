@@ -33,7 +33,9 @@ public class ChatServer implements Runnable{
 	ConcurrentMap<String, Connection> userConnectionMap = new ConcurrentHashMap<>();
 	ConcurrentMap<Connection, String> connectionUserMap = new ConcurrentHashMap<>();
 	ConcurrentMap<String, ChatRoom> rooms = new ConcurrentHashMap<>();
-
+	private final List<ChatMessage> globalHistory = Collections.synchronizedList(new ArrayList<>());
+	private static final int HISTORY_LIMIT = 20;
+	
 	public ChatServer(int portNumber) {
 		this.server = new Server();
 		this.portNumber = portNumber;
@@ -87,57 +89,105 @@ public class ChatServer implements Runnable{
 					return;
 				}
 				if (object instanceof ChatMessage) {
-	                ChatMessage chatMessage = (ChatMessage)object;
-	                System.out.println(chatMessage.getUser() + ":" + chatMessage.getTxt());
-					
-					if (chatMessage.roomName != null) {
-						ChatRoom room = rooms.get(chatMessage.roomName);
-						if (room != null && room.getMembers().contains(chatMessage.getUser())) {
-							room.addMessage(chatMessage);
-							for (String member : room.getMembers()) {
-								Connection c = userConnectionMap.get(member);
-								if (c != null && c.isConnected()) {
-									c.sendTCP(chatMessage);
-								}
-							}
-						}
-						return;
-					}
-	                if (chatMessage.isPrivate()) {
-	                    Connection recipientConn = userConnectionMap.get(chatMessage.getRecipient());
-	                    Connection senderConn = userConnectionMap.get(chatMessage.getUser());
-	                    if (recipientConn != null && recipientConn.isConnected()) {
-	                        recipientConn.sendTCP(chatMessage);
-	                    }
-	                    if (senderConn != null && senderConn.isConnected() && senderConn != recipientConn) {
-	                        senderConn.sendTCP(chatMessage);
-	                    }
-	                } 
-					else if (chatMessage.isMultiCast) {
-	                    if (chatMessage.multiRecipients != null) {
-	                        for (String recipient : chatMessage.multiRecipients) {
-	                            Connection recipientConn = userConnectionMap.get(recipient);
-	                            if (recipientConn != null && recipientConn.isConnected()) {
-	                                recipientConn.sendTCP(chatMessage);
-	                            }
-	                        }
-	                    }
-	                    Connection senderConn = userConnectionMap.get(chatMessage.getUser());
-	                    if (senderConn != null && senderConn.isConnected() && (chatMessage.multiRecipients == null || !chatMessage.multiRecipients.contains(chatMessage.getUser()))) {
-	                        senderConn.sendTCP(chatMessage);
-	                    }
-	                } else {
-	                    broadcastChatMessage(chatMessage, connection); 
-	                }
-	                return;
-	            }
+				    ChatMessage chatMessage = (ChatMessage)object;
+				    System.out.println(chatMessage.getUser() + ":" + chatMessage.getTxt());
+
+				    if (chatMessage.edited) {
+				        if (chatMessage.roomName != null) {
+				            ChatRoom room = rooms.get(chatMessage.roomName);
+				            if (room != null) {
+				                List<ChatMessage> history = room.getHistoryRef();
+				                int idx = chatMessage.editedMsgIndex != null ? chatMessage.editedMsgIndex - 1 : -1;
+				                if (idx >= 0 && idx < history.size()) {
+				                    ChatMessage oldMsg = history.get(idx);
+				                    if (oldMsg.getUser().equals(chatMessage.getUser())) {
+				                        oldMsg.setTxt(chatMessage.getTxt());
+				                        oldMsg.edited = true;
+				                        oldMsg.editedAt = System.currentTimeMillis();
+				                        oldMsg.editedMsgIndex = chatMessage.editedMsgIndex; 
+				                        for (String member : room.getMembers()) {
+				                            Connection c = userConnectionMap.get(member);
+				                            if (c != null && c.isConnected()) {
+				                                c.sendTCP(oldMsg);
+				                            }
+				                        }
+				                    }
+				                }
+				            }
+				        } else {
+				            int idx = chatMessage.editedMsgIndex != null ? chatMessage.editedMsgIndex - 1 : -1;
+				            synchronized (globalHistory) {
+				                if (idx >= 0 && idx < globalHistory.size()) {
+				                    ChatMessage oldMsg = globalHistory.get(idx);
+				                    if (oldMsg.getUser().equals(chatMessage.getUser())) {
+				                        oldMsg.setTxt(chatMessage.getTxt());
+				                        oldMsg.edited = true;
+				                        oldMsg.editedAt = System.currentTimeMillis();
+				                        oldMsg.editedMsgIndex = chatMessage.editedMsgIndex; 
+				                        for (Connection c : userConnectionMap.values()) {
+				                            if (c != null && c.isConnected()) {
+				                                c.sendTCP(oldMsg);
+				                            }
+				                        }
+				                    }
+				                }
+				            }
+				        }
+				        return;
+				    }
+
+				    if (chatMessage.roomName != null) {
+				        ChatRoom room = rooms.get(chatMessage.roomName);
+				        if (room != null && room.getMembers().contains(chatMessage.getUser())) {
+				            room.addMessage(chatMessage);
+				            for (String member : room.getMembers()) {
+				                Connection c = userConnectionMap.get(member);
+				                if (c != null && c.isConnected()) {
+				                    c.sendTCP(chatMessage);
+				                }
+				            }
+				        }
+				        return;
+				    } else if (chatMessage.isPrivate()) {
+				        Connection recipientConn = userConnectionMap.get(chatMessage.getRecipient());
+				        Connection senderConn = userConnectionMap.get(chatMessage.getUser());
+				        if (recipientConn != null && recipientConn.isConnected()) {
+				            recipientConn.sendTCP(chatMessage);
+				        }
+				        if (senderConn != null && senderConn.isConnected() && senderConn != recipientConn) {
+				            senderConn.sendTCP(chatMessage);
+				        }
+				        return;
+				    } else if (chatMessage.isMultiCast) {
+				        if (chatMessage.multiRecipients != null) {
+				            for (String recipient : chatMessage.multiRecipients) {
+				                Connection recipientConn = userConnectionMap.get(recipient);
+				                if (recipientConn != null && recipientConn.isConnected()) {
+				                    recipientConn.sendTCP(chatMessage);
+				                }
+				            }
+				        }
+				        Connection senderConn = userConnectionMap.get(chatMessage.getUser());
+				        if (senderConn != null && senderConn.isConnected() && (chatMessage.multiRecipients == null || !chatMessage.multiRecipients.contains(chatMessage.getUser()))) {
+				            senderConn.sendTCP(chatMessage);
+				        }
+				        return;
+				    } else {
+				        synchronized(globalHistory) {
+				            globalHistory.add(chatMessage);
+				            if (globalHistory.size() > HISTORY_LIMIT) globalHistory.remove(0);
+				        }
+				        broadcastChatMessage(chatMessage, connection);
+				        return;
+				    }
+				}
 
 	            if (object instanceof WhoRequest) {
 	                ListUsers listUsers = new ListUsers(getAllUsers());
 	                connection.sendTCP(listUsers);
 	                return;
 	            }
-	        }
+	        } 
 	        
 	        public void disconnected(Connection connection) {
 	            String user = connectionUserMap.get(connection);
@@ -168,10 +218,10 @@ public class ChatServer implements Runnable{
 		showTextToAll("User "+loginMessage.getUserName()+" has connected!", conn);
 	}
 	private void broadcastChatMessage(ChatMessage message, Connection exception) {
-		for (Connection conn: userConnectionMap.values()) {
-			if (conn.isConnected() && conn != exception)
-				conn.sendTCP(message);
-		}
+	    for (Connection conn: userConnectionMap.values()) {
+	        if (conn.isConnected())
+	            conn.sendTCP(message);
+	    }
 	}
 	private void showTextToAll(String txt, Connection exception) {
 		System.out.println(txt);

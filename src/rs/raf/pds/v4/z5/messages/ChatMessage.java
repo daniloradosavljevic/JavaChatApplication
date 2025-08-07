@@ -18,6 +18,10 @@ public class ChatMessage {
     public String repliedMsgUser;     
     public String repliedMsgExtract;
     
+    public boolean edited = false;
+    public Integer editedMsgIndex = null;
+    public Long editedAt = null;
+    
     protected ChatMessage() {}
 
     public ChatMessage(String user, String txt) {
@@ -54,6 +58,9 @@ public class ChatMessage {
 
     public String getTxt() {
         return txt;
+    }
+    public void setTxt(String txt) {
+    	this.txt = txt;
     }
 
     public String getRecipient() {

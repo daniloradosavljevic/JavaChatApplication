@@ -1,50 +1,80 @@
-# Kratka uputstva za komande
+# Quick Chat Commands Guide
 
-- **Broadcast poruka svim korisnicima:**
+- **Broadcast message to all users:**
   ```
-  tekst_poruke
-  ```
-
-- **Privatna poruka:**
-  ```
-  /pm korisnicko_ime poruka
+  message_text
   ```
 
-- **Multicast poruka (više korisnika):**
+- **Private message:**
   ```
-  /mc korisnik1 korisnik2 ... poruka
+  /pm username message
+  ```
+
+- **Multicast message (to multiple users):**
+  ```
+  /mc user1 user2 ... message
   ```
 
 ---
 
-## Komande za chat sobe
+## Chat Room Commands
 
-- **Kreiranje sobe:**
+- **Create a chat room:**
   ```
-  /createroom imeSobe [korisnik_pozvan]
+  /createroom roomName [invited_user]
   ```
 
-- **Prikaz svih soba:**
+- **List all chat rooms:**
   ```
   /rooms
   ```
 
-- **Pridruži se sobi:**
+- **Join a chat room:**
   ```
-  /joinroom imeSobe
+  /joinroom roomName
   ```
 
-- **Slanje poruke u sobu:**
+- **Send a message to a room:**
   ```
-  /room imeSobe poruka
+  /room roomName message
   ```
 
 ---
 
-## Automatsko pokretanje servera i 4 korisnika
+## Reply and Edit Functionality
 
-Za automatsko pokretanje servera i 4 korisnika u posebnim terminalima koristi skriptu:
+- **Reply to a specific message**  
+  (works for global and room messages; use the global message number as shown in the chat):
+  ```
+  /reply #message_number @username reply_text
+  ```
+  Example:
+  ```
+  /reply #2 @john That's a good point!
+  ```
+  - The reply will be visually marked and refer to the original message.
+
+- **Edit your own message**  
+  (works for global and room messages; you can only edit your own messages):
+  ```
+  /edit #message_number new_text
+  ```
+  Example:
+  ```
+  /edit #3 Updated message text
+  ```
+  - Edited messages are marked as `(edited #N)` where `N` is the global number of the edited message.
+
+---
+
+## Automatically Starting Server and 4 Clients
+
+To automatically launch the server and 4 users in separate terminals, use the script:
 
 ```
 python cmdchat.py
 ```
+
+This will open dedicated terminal windows for the server and each client.
+
+---

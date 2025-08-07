@@ -114,11 +114,19 @@ public class ChatClient implements Runnable{
 	    if (chatMessage.roomName != null) {
 	        roomHistories.putIfAbsent(chatMessage.roomName, new ArrayList<>());
 	        List<ChatMessage> list = roomHistories.get(chatMessage.roomName);
-	        list.add(chatMessage);
-	        if (list.size() > HISTORY_LIMIT) list.remove(0);
+	        if (chatMessage.edited && chatMessage.editedMsgIndex != null && chatMessage.editedMsgIndex > 0 && chatMessage.editedMsgIndex <= list.size()) {
+	            list.set(chatMessage.editedMsgIndex - 1, chatMessage);
+	        } else {
+	            list.add(chatMessage);
+	            if (list.size() > HISTORY_LIMIT) list.remove(0);
+	        }
 	    } else {
-	        globalHistory.add(chatMessage);
-	        if (globalHistory.size() > HISTORY_LIMIT) globalHistory.remove(0);
+	        if (chatMessage.edited && chatMessage.editedMsgIndex != null && chatMessage.editedMsgIndex > 0 && chatMessage.editedMsgIndex <= globalHistory.size()) {
+	            globalHistory.set(chatMessage.editedMsgIndex - 1, chatMessage);
+	        } else {
+	            globalHistory.add(chatMessage);
+	            if (globalHistory.size() > HISTORY_LIMIT) globalHistory.remove(0);
+	        }
 	    }
 
 	    String prefix = "";
@@ -139,17 +147,22 @@ public class ChatClient implements Runnable{
 	    }
 	    String numStr = (number > 0 ? "#" + number + " " : "");
 
+	    String editedMark = "";
+	    if (chatMessage.edited && chatMessage.editedMsgIndex != null) {
+	        editedMark = " (edited #" + chatMessage.editedMsgIndex + ")";
+	    }
+
 	    if (chatMessage.roomName != null) {
 	        System.out.println(numStr + prefix + "[ROOM " + chatMessage.roomName + "] " + 
-	            chatMessage.getUser() + ": " + chatMessage.getTxt());
+	            chatMessage.getUser() + ": " + chatMessage.getTxt() + editedMark);
 	    } else if (chatMessage.isPrivate()) {
 	        System.out.println(numStr + prefix + "[PRIVATE] " + chatMessage.getUser() + 
-	            " -> " + chatMessage.getRecipient() + ": " + chatMessage.getTxt());
+	            " -> " + chatMessage.getRecipient() + ": " + chatMessage.getTxt() + editedMark);
 	    } else if (chatMessage.isMultiCast) {
 	        System.out.println(numStr + prefix + "[MULTICAST] " + chatMessage.getUser() + 
-	            " -> " + chatMessage.multiRecipients + ": " + chatMessage.getTxt());
+	            " -> " + chatMessage.multiRecipients + ": " + chatMessage.getTxt() + editedMark);
 	    } else {
-	        System.out.println(numStr + prefix + chatMessage.getUser() + ":" + chatMessage.getTxt());
+	        System.out.println(numStr + prefix + chatMessage.getUser() + ":" + chatMessage.getTxt() + editedMark);
 	    }
 	}
 	private void showMessage(String txt) {
@@ -299,6 +312,54 @@ public class ChatClient implements Runnable{
 	                    }
 	                } catch (Exception e) {
 	                    System.out.println("Greska u reply komandi: " + e.getMessage());
+	                }
+	            }
+	            else if (userInput.startsWith("/edit ")) {
+	                try {
+	                    String[] parts = userInput.split("\\s+", 3);
+	                    if (parts.length < 3 || !parts[1].startsWith("#")) {
+	                        System.out.println("Pravilno: /edit #broj Novi tekst");
+	                    } else {
+	                        int idx = Integer.parseInt(parts[1].substring(1));
+	                        String newText = parts[2];
+
+	                        ChatMessage toEdit = null;
+	                        String roomName = null;
+	                        for (Map.Entry<String, List<ChatMessage>> entry : roomHistories.entrySet()) {
+	                            List<ChatMessage> list = entry.getValue();
+	                            if (idx > 0 && idx <= list.size()) {
+	                                ChatMessage m = list.get(idx - 1);
+	                                if (m.getUser().equals(userName)) {
+	                                    toEdit = m;
+	                                    roomName = entry.getKey();
+	                                    break;
+	                                }
+	                            }
+	                        }
+	                        if (toEdit == null) {
+	                            if (idx > 0 && idx <= globalHistory.size()) {
+	                                ChatMessage m = globalHistory.get(idx - 1);
+	                                if (m.getUser().equals(userName)) {
+	                                    toEdit = m;
+	                                }
+	                            }
+	                        }
+	                        if (toEdit == null) {
+	                            System.out.println("Nije pronadjena tvoja poruka sa tim rednim brojem.");
+	                        } else {
+	                            ChatMessage editMsg;
+	                            if (roomName != null) {
+	                                editMsg = new ChatMessage(userName, roomName, newText);
+	                            } else {
+	                                editMsg = new ChatMessage(userName, newText);
+	                            }
+	                            editMsg.edited = true;
+	                            editMsg.editedMsgIndex = idx;
+	                            client.sendTCP(editMsg);
+	                        }
+	                    }
+	                } catch (Exception e) {
+	                    System.out.println("Greska u edit komandi: " + e.getMessage());
 	                }
 	            }
 	            else {
