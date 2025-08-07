@@ -45,7 +45,6 @@ public class ChatServer implements Runnable{
 	private void registerListener() {
 	    server.addListener(new Listener() {
 	        public void received(Connection connection, Object object) {
-	            // LOGIN
 	            if (object instanceof Login) {
 	                Login login = (Login)object;
 	                newUserLogged(login, connection);
@@ -80,10 +79,10 @@ public class ChatServer implements Runnable{
 					JoinRoomRequest req = (JoinRoomRequest)object;
 					ChatRoom room = rooms.get(req.roomName);
 					if (room == null) {
-						connection.sendTCP(new JoinRoomResponse(false, "Room does not exist", null));
+						connection.sendTCP(new JoinRoomResponse(false, "Room does not exist", null,req.roomName));
 					} else {
 						room.addMember(req.user);
-						connection.sendTCP(new JoinRoomResponse(true, null, room.getLastMessages()));
+						connection.sendTCP(new JoinRoomResponse(true, null, room.getLastMessages(),req.roomName));
 						showTextToAll(req.user + " joined room '" + req.roomName + "'", null);
 					}
 					return;
@@ -199,6 +198,7 @@ public class ChatServer implements Runnable{
 						room.removeMember(user);
 					}
 	            }
+	    		broadcastUsersList();
 	        }
 	    });
 	}
@@ -212,11 +212,14 @@ public class ChatServer implements Runnable{
 		}
 		return users;
 	}
+	
 	void newUserLogged(Login loginMessage, Connection conn) {
 		userConnectionMap.put(loginMessage.getUserName(), conn);
 		connectionUserMap.put(conn, loginMessage.getUserName());
 		showTextToAll("User "+loginMessage.getUserName()+" has connected!", conn);
+		broadcastUsersList();
 	}
+	
 	private void broadcastChatMessage(ChatMessage message, Connection exception) {
 	    for (Connection conn: userConnectionMap.values()) {
 	        if (conn.isConnected())
@@ -230,6 +233,15 @@ public class ChatServer implements Runnable{
 				conn.sendTCP(new InfoMessage(txt));
 		}
 	}
+	private void broadcastUsersList() {
+	    ListUsers listUsers = new ListUsers(getAllUsers());
+	    for (Connection conn : userConnectionMap.values()) {
+	        if (conn.isConnected()) {
+	            conn.sendTCP(listUsers);
+	        }
+	    }
+	}
+
 	public void start() throws IOException {
 		server.start();
 		server.bind(portNumber);
@@ -259,6 +271,7 @@ public class ChatServer implements Runnable{
 	}
 	
 	public static void main(String[] args) {
+		
 		if (args.length != 1) {
 	        System.err.println("Usage: java -jar chatServer.jar <port number>");
 	        System.out.println("Recommended port number is 54555");
