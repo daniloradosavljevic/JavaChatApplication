@@ -29,4 +29,7 @@ public class ChatRoom {
 	    public List<ChatMessage> getLastMessages() {
 	        return new ArrayList<>(history);
 	    }
+	    public List<ChatMessage> getHistory() {
+	        return new ArrayList<>(history);
+	    }
 }

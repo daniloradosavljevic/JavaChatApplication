@@ -15,10 +15,19 @@ import rs.raf.pds.v4.z5.messages.ListUsers;
 import rs.raf.pds.v4.z5.messages.Login;
 import rs.raf.pds.v4.z5.messages.WhoRequest;
 
+import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
+
 public class ChatClient implements Runnable{
 
 	public static int DEFAULT_CLIENT_READ_BUFFER_SIZE = 1000000;
 	public static int DEFAULT_CLIENT_WRITE_BUFFER_SIZE = 1000000;
+	
+	private static final int HISTORY_LIMIT = 20;
+	private final List<ChatMessage> globalHistory = new ArrayList<>();
+	private final Map<String, List<ChatMessage>> roomHistories = new HashMap<>();
 	
 	private volatile Thread thread = null;
 	
@@ -103,13 +112,44 @@ public class ChatClient implements Runnable{
 	}
 	private void showChatMessage(ChatMessage chatMessage) {
 	    if (chatMessage.roomName != null) {
-	        System.out.println("[ROOM " + chatMessage.roomName + "] " + chatMessage.getUser() + ": " + chatMessage.getTxt());
-	    } else if (chatMessage.isPrivate()) {
-	        System.out.println("[PRIVATE] " + chatMessage.getUser() + " -> " + chatMessage.getRecipient() + ": " + chatMessage.getTxt());
-	    } else if (chatMessage.isMultiCast) {
-	        System.out.println("[MULTICAST] " + chatMessage.getUser() + " -> " + chatMessage.multiRecipients + ": " + chatMessage.getTxt());
+	        roomHistories.putIfAbsent(chatMessage.roomName, new ArrayList<>());
+	        List<ChatMessage> list = roomHistories.get(chatMessage.roomName);
+	        list.add(chatMessage);
+	        if (list.size() > HISTORY_LIMIT) list.remove(0);
 	    } else {
-	        System.out.println(chatMessage.getUser() + ":" + chatMessage.getTxt());
+	        globalHistory.add(chatMessage);
+	        if (globalHistory.size() > HISTORY_LIMIT) globalHistory.remove(0);
+	    }
+
+	    String prefix = "";
+	    if (chatMessage.repliedMsgIndex != null 
+	            && chatMessage.repliedMsgUser != null 
+	            && chatMessage.repliedMsgExtract != null) {
+	        prefix = "[REPLY to #" + chatMessage.repliedMsgIndex + " @" 
+	               + chatMessage.repliedMsgUser + ": \"" 
+	               + chatMessage.repliedMsgExtract + "\"]\n";
+	    }
+	    
+	    int number = 0;
+	    if (chatMessage.roomName != null) {
+	        List<ChatMessage> list = roomHistories.get(chatMessage.roomName);
+	        number = list != null ? list.indexOf(chatMessage) + 1 : 0;
+	    } else {
+	        number = globalHistory.indexOf(chatMessage) + 1;
+	    }
+	    String numStr = (number > 0 ? "#" + number + " " : "");
+
+	    if (chatMessage.roomName != null) {
+	        System.out.println(numStr + prefix + "[ROOM " + chatMessage.roomName + "] " + 
+	            chatMessage.getUser() + ": " + chatMessage.getTxt());
+	    } else if (chatMessage.isPrivate()) {
+	        System.out.println(numStr + prefix + "[PRIVATE] " + chatMessage.getUser() + 
+	            " -> " + chatMessage.getRecipient() + ": " + chatMessage.getTxt());
+	    } else if (chatMessage.isMultiCast) {
+	        System.out.println(numStr + prefix + "[MULTICAST] " + chatMessage.getUser() + 
+	            " -> " + chatMessage.multiRecipients + ": " + chatMessage.getTxt());
+	    } else {
+	        System.out.println(numStr + prefix + chatMessage.getUser() + ":" + chatMessage.getTxt());
 	    }
 	}
 	private void showMessage(String txt) {
@@ -211,6 +251,54 @@ public class ChatClient implements Runnable{
 	                    client.sendTCP(message);
 	                } else {
 	                    System.out.println("Unesi privatnu poruku kao: /pm username poruka");
+	                }
+	            }
+	            else if (userInput.startsWith("/reply ")) {
+	                try {
+	                    String[] parts = userInput.split("\\s+", 4);
+	                    if (parts.length < 4 || !parts[1].startsWith("#") || !parts[2].startsWith("@")) {
+	                        System.out.println("Pravilno: /reply #broj @korisnik tekst");
+	                    } else {
+	                        int idx = Integer.parseInt(parts[1].substring(1));
+	                        String targetUser = parts[2].substring(1);
+	                        String text = parts[3];
+
+	                        ChatMessage replied = null;
+	                        for (List<ChatMessage> list : roomHistories.values()) {
+	                            for (ChatMessage m : list) {
+	                                if (m.getUser().equals(targetUser) && list.indexOf(m) + 1 == idx) {
+	                                    replied = m;
+	                                    break;
+	                                }
+	                            }
+	                        }
+	                        if (replied == null) {
+	                            for (ChatMessage m : globalHistory) {
+	                                if (m.getUser().equals(targetUser) && globalHistory.indexOf(m) + 1 == idx) {
+	                                    replied = m;
+	                                    break;
+	                                }
+	                            }
+	                        }
+	                        if (replied == null) {
+	                            System.out.println("Poruka nije pronadjena.");
+	                        } else {
+	                            ChatMessage msg;
+	                            if (replied.roomName != null) {
+	                                msg = new ChatMessage(userName, replied.roomName, text);
+	                            } else if (replied.isPrivate()) {
+	                                msg = new ChatMessage(userName, text, replied.getUser(), true);
+	                            } else {
+	                                msg = new ChatMessage(userName, text);
+	                            }
+	                            msg.repliedMsgIndex = idx;
+	                            msg.repliedMsgUser = targetUser;
+	                            msg.repliedMsgExtract = replied.getTxt().length() > 30 ? replied.getTxt().substring(0, 30) : replied.getTxt();
+	                            client.sendTCP(msg);
+	                        }
+	                    }
+	                } catch (Exception e) {
+	                    System.out.println("Greska u reply komandi: " + e.getMessage());
 	                }
 	            }
 	            else {

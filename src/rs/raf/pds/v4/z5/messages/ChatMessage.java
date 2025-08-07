@@ -14,6 +14,10 @@ public class ChatMessage {
     
     public String roomName;
     
+    public Integer repliedMsgIndex;
+    public String repliedMsgUser;     
+    public String repliedMsgExtract;
+    
     protected ChatMessage() {}
 
     public ChatMessage(String user, String txt) {
