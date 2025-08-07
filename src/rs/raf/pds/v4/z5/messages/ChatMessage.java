@@ -12,6 +12,8 @@ public class ChatMessage {
     public boolean isMultiCast;
     public List<String> multiRecipients;
     
+    public String roomName;
+    
     protected ChatMessage() {}
 
     public ChatMessage(String user, String txt) {
@@ -33,6 +35,13 @@ public class ChatMessage {
         this.txt = txt;
         this.isPrivate = false;
         this.isMultiCast = true;
+    }
+    public ChatMessage(String user, String roomName, String txt) {
+        this.user = user;
+        this.roomName = roomName;
+        this.txt = txt;
+        this.isPrivate = false;
+        this.isMultiCast = false;
     }
 
     public String getUser() {

@@ -1,6 +1,7 @@
 package rs.raf.pds.v4.z5;
 
 import java.io.IOException;
+import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
 
@@ -15,6 +16,12 @@ import rs.raf.pds.v4.z5.messages.ListUsers;
 import rs.raf.pds.v4.z5.messages.Login;
 import rs.raf.pds.v4.z5.messages.WhoRequest;
 
+import rs.raf.pds.v4.z5.messages.CreateRoomRequest;
+import rs.raf.pds.v4.z5.messages.CreateRoomResponse;
+import rs.raf.pds.v4.z5.messages.ListRoomsRequest;
+import rs.raf.pds.v4.z5.messages.ListRoomsResponse;
+import rs.raf.pds.v4.z5.messages.JoinRoomRequest;
+import rs.raf.pds.v4.z5.messages.JoinRoomResponse;
 
 public class ChatServer implements Runnable{
 
@@ -23,12 +30,12 @@ public class ChatServer implements Runnable{
 	volatile boolean running = false;
 	final Server server;
 	final int portNumber;
-	ConcurrentMap<String, Connection> userConnectionMap = new ConcurrentHashMap<String, Connection>();
-	ConcurrentMap<Connection, String> connectionUserMap = new ConcurrentHashMap<Connection, String>();
-	
+	ConcurrentMap<String, Connection> userConnectionMap = new ConcurrentHashMap<>();
+	ConcurrentMap<Connection, String> connectionUserMap = new ConcurrentHashMap<>();
+	ConcurrentMap<String, ChatRoom> rooms = new ConcurrentHashMap<>();
+
 	public ChatServer(int portNumber) {
 		this.server = new Server();
-		
 		this.portNumber = portNumber;
 		KryoUtil.registerKryoClasses(server.getKryo());
 		registerListener();
@@ -36,6 +43,7 @@ public class ChatServer implements Runnable{
 	private void registerListener() {
 	    server.addListener(new Listener() {
 	        public void received(Connection connection, Object object) {
+	            // LOGIN
 	            if (object instanceof Login) {
 	                Login login = (Login)object;
 	                newUserLogged(login, connection);
@@ -47,11 +55,54 @@ public class ChatServer implements Runnable{
 	                }
 	                return;
 	            }
-
-	            if (object instanceof ChatMessage) {
+				if (object instanceof CreateRoomRequest) {
+					CreateRoomRequest req = (CreateRoomRequest)object;
+					if (rooms.containsKey(req.roomName)) {
+						connection.sendTCP(new CreateRoomResponse(false, "Room already exists"));
+					} else {
+						ChatRoom room = new ChatRoom(req.roomName);
+						room.addMember(req.inviter);
+						if (req.invitee != null && !req.invitee.isEmpty()) room.addMember(req.invitee);
+						rooms.put(req.roomName, room);
+						connection.sendTCP(new CreateRoomResponse(true, null));
+						showTextToAll("Chat room '" + req.roomName + "' created by " + req.inviter, null);
+					}
+					return;
+				}
+				if (object instanceof ListRoomsRequest) {
+					ListRoomsResponse resp = new ListRoomsResponse(new ArrayList<>(rooms.keySet()));
+					connection.sendTCP(resp);
+					return;
+				}
+				if (object instanceof JoinRoomRequest) {
+					JoinRoomRequest req = (JoinRoomRequest)object;
+					ChatRoom room = rooms.get(req.roomName);
+					if (room == null) {
+						connection.sendTCP(new JoinRoomResponse(false, "Room does not exist", null));
+					} else {
+						room.addMember(req.user);
+						connection.sendTCP(new JoinRoomResponse(true, null, room.getLastMessages()));
+						showTextToAll(req.user + " joined room '" + req.roomName + "'", null);
+					}
+					return;
+				}
+				if (object instanceof ChatMessage) {
 	                ChatMessage chatMessage = (ChatMessage)object;
 	                System.out.println(chatMessage.getUser() + ":" + chatMessage.getTxt());
-
+					
+					if (chatMessage.roomName != null) {
+						ChatRoom room = rooms.get(chatMessage.roomName);
+						if (room != null && room.getMembers().contains(chatMessage.getUser())) {
+							room.addMessage(chatMessage);
+							for (String member : room.getMembers()) {
+								Connection c = userConnectionMap.get(member);
+								if (c != null && c.isConnected()) {
+									c.sendTCP(chatMessage);
+								}
+							}
+						}
+						return;
+					}
 	                if (chatMessage.isPrivate()) {
 	                    Connection recipientConn = userConnectionMap.get(chatMessage.getRecipient());
 	                    Connection senderConn = userConnectionMap.get(chatMessage.getUser());
@@ -61,7 +112,8 @@ public class ChatServer implements Runnable{
 	                    if (senderConn != null && senderConn.isConnected() && senderConn != recipientConn) {
 	                        senderConn.sendTCP(chatMessage);
 	                    }
-	                } else if (chatMessage.isMultiCast) {
+	                } 
+					else if (chatMessage.isMultiCast) {
 	                    if (chatMessage.multiRecipients != null) {
 	                        for (String recipient : chatMessage.multiRecipients) {
 	                            Connection recipientConn = userConnectionMap.get(recipient);
@@ -93,6 +145,9 @@ public class ChatServer implements Runnable{
 	            if (user != null) {
 	                userConnectionMap.remove(user);
 	                showTextToAll(user + " has disconnected!", connection);
+					for (ChatRoom room : rooms.values()) {
+						room.removeMember(user);
+					}
 	            }
 	        }
 	    });
@@ -105,7 +160,6 @@ public class ChatServer implements Runnable{
 			users[i] = user;
 			i++;
 		}
-		
 		return users;
 	}
 	void newUserLogged(Login loginMessage, Connection conn) {
@@ -145,41 +199,30 @@ public class ChatServer implements Runnable{
 	@Override
 	public void run() {
 		running = true;
-		
 		while(running) {
 			try {
 				Thread.sleep(5000);
 			} catch (InterruptedException e) {
-				// TODO Auto-generated catch block
 				e.printStackTrace();
 			}
 		}
 	}
 	
-	
 	public static void main(String[] args) {
-		
 		if (args.length != 1) {
 	        System.err.println("Usage: java -jar chatServer.jar <port number>");
 	        System.out.println("Recommended port number is 54555");
 	        System.exit(1);
 	   }
-	    
 	   int portNumber = Integer.parseInt(args[0]);
 	   try { 
 		   ChatServer chatServer = new ChatServer(portNumber);
 	   	   chatServer.start();
-	   
 			chatServer.thread.join();
 	   } catch (InterruptedException e) {
-			// TODO Auto-generated catch block
 			e.printStackTrace();
 	   } catch (IOException e) {
-		// TODO Auto-generated catch block
-		e.printStackTrace();
+			e.printStackTrace();
 	   }
 	}
-	
-   
-   
 }

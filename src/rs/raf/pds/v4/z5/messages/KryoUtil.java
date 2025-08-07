@@ -12,5 +12,11 @@ public class KryoUtil {
 		kryo.register(ListUsers.class);
 		kryo.register(InfoMessage.class);
 		kryo.register(java.util.ArrayList.class);
+		kryo.register(rs.raf.pds.v4.z5.messages.CreateRoomRequest.class);
+		kryo.register(rs.raf.pds.v4.z5.messages.CreateRoomResponse.class);
+		kryo.register(rs.raf.pds.v4.z5.messages.ListRoomsRequest.class);
+		kryo.register(rs.raf.pds.v4.z5.messages.ListRoomsResponse.class);
+		kryo.register(rs.raf.pds.v4.z5.messages.JoinRoomRequest.class);
+		kryo.register(rs.raf.pds.v4.z5.messages.JoinRoomResponse.class);
 	}
 }
