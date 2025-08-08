@@ -1,6 +1,8 @@
 package rs.raf.pds.v4.z5.gui;
 
 import javafx.application.Platform;
+import javafx.scene.control.Alert;
+import javafx.scene.control.TextInputDialog;
 import javafx.scene.input.KeyCode;
 import rs.raf.pds.v4.z5.ChatClient;
 import rs.raf.pds.v4.z5.messages.ChatMessage;
@@ -10,6 +12,7 @@ import rs.raf.pds.v4.z5.messages.JoinRoomResponse;
 import java.util.Arrays;
 import java.util.HashSet;
 import java.util.List;
+import java.util.Optional;
 import java.util.Set;
 
 public class ChatController {
@@ -29,6 +32,18 @@ public class ChatController {
     private void setupHandlers() {
         view.sendButton.setOnAction(e -> sendMessage());
         view.inputField.setOnAction(e -> sendMessage());
+        view.createRoomButton.setOnAction(e -> {
+            TextInputDialog dialog = new TextInputDialog();
+            dialog.setTitle("Kreiraj sobu");
+            dialog.setHeaderText("Unesite naziv nove sobe:");
+            dialog.setContentText("Naziv sobe:");
+            Optional<String> result = dialog.showAndWait();
+            result.ifPresent(name -> {
+                if (!name.trim().isEmpty()) {
+                    client.submitGuiInput("/createroom " + name.trim());
+                }
+            });
+        });
         view.inputField.setOnKeyPressed(e -> {
             if (e.getCode() == KeyCode.UP) {
             }
@@ -73,6 +88,64 @@ public class ChatController {
             }
             view.messagesArea.appendText(sb.toString() + "\n");
         });
+    }
+    public void updateOrAppendMessage(ChatMessage msg, int globalNumber) {
+        Platform.runLater(() -> {
+            String newLine = formatMessage(msg, globalNumber);
+
+            String fullText = view.messagesArea.getText();
+            String[] lines = fullText.split("\n");
+
+            boolean replaced = false;
+            StringBuilder sb = new StringBuilder();
+
+            String searchNumber = null;
+            if (msg.edited && msg.editedMsgIndex != null) {
+                searchNumber = "#" + msg.editedMsgIndex + " ";
+            } else if (globalNumber > 0) {
+                searchNumber = "#" + globalNumber + " ";
+            }
+            for (String line : lines) {
+                if (searchNumber != null && line.startsWith(searchNumber)) {
+                    sb.append(newLine).append("\n");
+                    replaced = true;
+                } else {
+                    sb.append(line).append("\n");
+                }
+            }
+
+            if (!replaced) {
+                sb.append(newLine).append("\n");
+            }
+
+            view.messagesArea.setText(sb.toString().trim());
+        });
+    }
+    public void showUsernameExistsPopup(String errorMsg) {
+        javafx.application.Platform.runLater(() -> {
+            Alert alert = new Alert(Alert.AlertType.ERROR);
+            alert.setTitle("Greška pri logovanju");
+            alert.setHeaderText("Korisničko ime već postoji!");
+            alert.setContentText(errorMsg + "\nUnesite drugo korisničko ime.");
+            alert.showAndWait();
+        });
+    }
+    private String formatMessage(ChatMessage msg, int globalNumber) {
+        StringBuilder sb = new StringBuilder();
+        if (globalNumber > 0) sb.append("#").append(globalNumber).append(" ");
+        if (msg.roomName != null) sb.append("[ROOM ").append(msg.roomName).append("] ");
+        if (msg.isPrivate()) sb.append("[PRIVATE] ");
+        if (msg.isMultiCast) sb.append("[MULTICAST] ");
+        sb.append(msg.getUser()).append(": ").append(msg.getTxt());
+        if (msg.edited && msg.editedMsgIndex != null) {
+            sb.append(" (edited #").append(msg.editedMsgIndex).append(")");
+        }
+        if (msg.repliedMsgIndex != null && msg.repliedMsgUser != null) {
+            sb.append("\n    ↳ Reply to #").append(msg.repliedMsgIndex)
+              .append(" @").append(msg.repliedMsgUser)
+              .append(": ").append(msg.repliedMsgExtract);
+        }
+        return sb.toString();
     }
 
     public void appendSystemMessage(String msg) {

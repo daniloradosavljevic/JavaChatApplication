@@ -13,7 +13,7 @@ public class ChatMessage {
     public List<String> multiRecipients;
     
     public String roomName;
-    
+    public int msgNumber = 0; 
     public Integer repliedMsgIndex;
     public String repliedMsgUser;     
     public String repliedMsgExtract;

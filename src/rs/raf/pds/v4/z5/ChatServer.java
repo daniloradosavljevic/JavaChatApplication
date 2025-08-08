@@ -35,6 +35,7 @@ public class ChatServer implements Runnable{
 	ConcurrentMap<String, ChatRoom> rooms = new ConcurrentHashMap<>();
 	private final List<ChatMessage> globalHistory = Collections.synchronizedList(new ArrayList<>());
 	private static final int HISTORY_LIMIT = 20;
+	private int globalMsgCounter = 0;
 	
 	public ChatServer(int portNumber) {
 		this.server = new Server();
@@ -48,6 +49,14 @@ public class ChatServer implements Runnable{
 	            if (object instanceof Login) {
 	                Login login = (Login)object;
 	                newUserLogged(login, connection);
+	                List<ChatMessage> lastMessages;
+	                synchronized (globalHistory) {
+	                    int count = Math.min(globalHistory.size(), HISTORY_LIMIT);
+	                    lastMessages = new ArrayList<>(globalHistory.subList(globalHistory.size() - count, globalHistory.size()));
+	                }
+	                for (ChatMessage m : lastMessages) {
+	                    connection.sendTCP(m); 
+	                }
 	                connection.sendTCP(new InfoMessage("Hello " + login.getUserName()));
 	                try {
 	                    Thread.sleep(2000);
@@ -96,37 +105,56 @@ public class ChatServer implements Runnable{
 				            ChatRoom room = rooms.get(chatMessage.roomName);
 				            if (room != null) {
 				                List<ChatMessage> history = room.getHistoryRef();
-				                int idx = chatMessage.editedMsgIndex != null ? chatMessage.editedMsgIndex - 1 : -1;
-				                if (idx >= 0 && idx < history.size()) {
-				                    ChatMessage oldMsg = history.get(idx);
-				                    if (oldMsg.getUser().equals(chatMessage.getUser())) {
-				                        oldMsg.setTxt(chatMessage.getTxt());
-				                        oldMsg.edited = true;
-				                        oldMsg.editedAt = System.currentTimeMillis();
-				                        oldMsg.editedMsgIndex = chatMessage.editedMsgIndex; 
-				                        for (String member : room.getMembers()) {
-				                            Connection c = userConnectionMap.get(member);
-				                            if (c != null && c.isConnected()) {
-				                                c.sendTCP(oldMsg);
-				                            }
+				                ChatMessage oldMsg = null;
+				                for (ChatMessage m : history) {
+				                    if (m.msgNumber == chatMessage.editedMsgIndex && m.getUser().equals(chatMessage.getUser())) {
+				                        oldMsg = m;
+				                        break;
+				                    }
+				                }
+				                if (oldMsg != null) {
+				                    ChatMessage editedMsg = new ChatMessage(
+				                        oldMsg.getUser(),
+				                        oldMsg.roomName,
+				                        chatMessage.getTxt()
+				                    );
+				                    editedMsg.msgNumber = ++globalMsgCounter;
+				                    editedMsg.edited = true;
+				                    editedMsg.editedAt = System.currentTimeMillis();
+				                    editedMsg.editedMsgIndex = chatMessage.editedMsgIndex;
+				                    history.add(editedMsg);
+				                    if (history.size() > HISTORY_LIMIT) history.remove(0);
+				                    for (String member : room.getMembers()) {
+				                        Connection c = userConnectionMap.get(member);
+				                        if (c != null && c.isConnected()) {
+				                            c.sendTCP(editedMsg);
 				                        }
 				                    }
 				                }
 				            }
 				        } else {
-				            int idx = chatMessage.editedMsgIndex != null ? chatMessage.editedMsgIndex - 1 : -1;
 				            synchronized (globalHistory) {
-				                if (idx >= 0 && idx < globalHistory.size()) {
-				                    ChatMessage oldMsg = globalHistory.get(idx);
-				                    if (oldMsg.getUser().equals(chatMessage.getUser())) {
-				                        oldMsg.setTxt(chatMessage.getTxt());
-				                        oldMsg.edited = true;
-				                        oldMsg.editedAt = System.currentTimeMillis();
-				                        oldMsg.editedMsgIndex = chatMessage.editedMsgIndex; 
-				                        for (Connection c : userConnectionMap.values()) {
-				                            if (c != null && c.isConnected()) {
-				                                c.sendTCP(oldMsg);
-				                            }
+				                ChatMessage oldMsg = null;
+				                for (ChatMessage m : globalHistory) {
+				                    if (m.msgNumber == chatMessage.editedMsgIndex && m.getUser().equals(chatMessage.getUser())) {
+				                        oldMsg = m;
+				                        break;
+				                    }
+				                }
+				                if (oldMsg != null) {
+				                    ChatMessage editedMsg = new ChatMessage(
+				                        oldMsg.getUser(),
+				                        chatMessage.getTxt()
+				                    );
+				                    editedMsg.msgNumber = ++globalMsgCounter;
+				                    editedMsg.edited = true;
+				                    editedMsg.editedAt = System.currentTimeMillis();
+				                    editedMsg.editedMsgIndex = chatMessage.editedMsgIndex;
+				                    globalHistory.add(editedMsg);
+				                    if (globalHistory.size() > HISTORY_LIMIT) globalHistory.remove(0);
+				                    for (Connection c : userConnectionMap.values()) {
+				                        if (c != null && c.isConnected()) {
+				                            c.sendTCP(editedMsg);
 				                        }
 				                    }
 				                }
@@ -173,6 +201,7 @@ public class ChatServer implements Runnable{
 				        return;
 				    } else {
 				        synchronized(globalHistory) {
+				        	chatMessage.msgNumber = ++globalMsgCounter;
 				            globalHistory.add(chatMessage);
 				            if (globalHistory.size() > HISTORY_LIMIT) globalHistory.remove(0);
 				        }
@@ -214,6 +243,11 @@ public class ChatServer implements Runnable{
 	}
 	
 	void newUserLogged(Login loginMessage, Connection conn) {
+		if (userConnectionMap.containsKey(loginMessage.getUserName())) {
+	        conn.sendTCP(new InfoMessage("ERROR: Username '" + loginMessage.getUserName() + "' is already online!"));
+	        conn.close(); 
+	        return;
+	    }
 		userConnectionMap.put(loginMessage.getUserName(), conn);
 		connectionUserMap.put(conn, loginMessage.getUserName());
 		showTextToAll("User "+loginMessage.getUserName()+" has connected!", conn);

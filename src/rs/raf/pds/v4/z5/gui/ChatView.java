@@ -7,9 +7,12 @@ import javafx.geometry.Insets;
 import javafx.geometry.Pos;
 import javafx.scene.Scene;
 import javafx.scene.control.*;
+import javafx.scene.input.MouseButton;
 import javafx.scene.layout.*;
 import javafx.stage.Modality;
 import javafx.stage.Stage;
+import javafx.scene.control.CheckBox;
+import javafx.scene.input.MouseEvent;
 
 public class ChatView extends BorderPane {
     public TextArea messagesArea = new TextArea();
@@ -17,9 +20,13 @@ public class ChatView extends BorderPane {
     public Button sendButton = new Button("Send");
     public Button refreshUsersButton = new Button("Refresh");
     public Button refreshRoomsButton = new Button("Refresh Rooms");
+    public Button createRoomButton = new Button("Create Room");
     public Button helpButton = new Button("Help");
+    public Button clearChatButton = new Button("Clear Chat");
     public ListView<String> userList = new ListView<>();
     public ListView<String> roomList = new ListView<>();
+    public CheckBox pmCheckBox = new CheckBox("pm");
+    public CheckBox mcCheckBox = new CheckBox("mc");
     public Label statusLabel = new Label("Java Chat by DaniloR");
 
     private static final String HELP_TEXT =
@@ -59,6 +66,139 @@ public class ChatView extends BorderPane {
         String border = "#202225";
         String font = "'Segoe UI', 'Fira Mono', 'Arial', sans-serif";
 
+        messagesArea.setContextMenu(new ContextMenu()); 
+
+        messagesArea.setOnMouseClicked(e -> {
+            if (e.getButton() == MouseButton.SECONDARY) { 
+                int caretPosition = messagesArea.getCaretPosition();
+                String[] lines = messagesArea.getText().split("\n");
+                int charCount = 0;
+                for (String line : lines) {
+                    charCount += line.length() + 1; 
+                    if (caretPosition < charCount) {
+                        String regex = "#(\\d+)\\s+(?:\\[.*?\\]\\s+)?(\\w+):";
+                        java.util.regex.Matcher m = java.util.regex.Pattern.compile(regex).matcher(line);
+                        if (m.find()) {
+                            String broj = m.group(1);
+                            String ime = m.group(2);
+
+                            ContextMenu menu = new ContextMenu();
+
+                            MenuItem replyItem = new MenuItem("Reply na ovu poruku");
+                            replyItem.setOnAction(ev -> {
+                                inputField.setText("/reply #" + broj + " @" + ime + " ");
+                                inputField.requestFocus();
+                                inputField.end();
+                            });
+                            menu.getItems().add(replyItem);
+                            Stage stage = (Stage) messagesArea.getScene().getWindow();
+                            String title = stage.getTitle();
+                            String username = "";
+                            if (title != null && title.contains(" - ")) {
+                                username = title.substring(title.indexOf(" - ") + 3);
+                            }
+
+                            if (ime.equals(username)) {
+                                MenuItem editItem = new MenuItem("Edituj ovu poruku");
+                                editItem.setOnAction(ev -> {
+                                    inputField.setText("/edit #" + broj + " ");
+                                    inputField.requestFocus();
+                                    inputField.end();
+                                });
+                                menu.getItems().add(editItem);
+                            }
+
+                            messagesArea.setContextMenu(menu);
+                        }
+                        break;
+                    }
+                }
+            }
+        });
+        
+        clearChatButton.setStyle(
+                "-fx-background-color: #23272a;" +
+                "-fx-text-fill: #dcddde;" +
+                "-fx-font-size: 14px;" +
+                "-fx-font-family: " + font + ";" +
+                "-fx-background-radius: 10;" +
+                "-fx-cursor: hand;" +
+                "-fx-font-weight: bold;"
+            );
+            clearChatButton.setOnMouseEntered(e -> clearChatButton.setStyle(
+                "-fx-background-color: #393c43;" +
+                "-fx-text-fill: #dcddde;" +
+                "-fx-font-size: 14px;" +
+                "-fx-font-family: " + font + ";" +
+                "-fx-background-radius: 10;" +
+                "-fx-cursor: hand;" +
+                "-fx-font-weight: bold;"
+            ));
+            clearChatButton.setOnMouseExited(e -> clearChatButton.setStyle(
+                "-fx-background-color: #23272a;" +
+                "-fx-text-fill: #dcddde;" +
+                "-fx-font-size: 14px;" +
+                "-fx-font-family: " + font + ";" +
+                "-fx-background-radius: 10;" +
+                "-fx-cursor: hand;" +
+                "-fx-font-weight: bold;"
+            ));
+            clearChatButton.setPrefWidth(120);
+            clearChatButton.setOnAction(e -> messagesArea.clear());
+
+        pmCheckBox.setStyle(
+        	    "-fx-font-family: 'Segoe UI', 'Fira Mono', 'Arial', sans-serif;" +
+        	    "-fx-font-size: 14px;" +
+        	    "-fx-text-fill: #dcddde;" +
+        	    "-fx-padding: 0 10 0 0;"
+        	);
+        	mcCheckBox.setStyle(
+        	    "-fx-font-family: 'Segoe UI', 'Fira Mono', 'Arial', sans-serif;" +
+        	    "-fx-font-size: 14px;" +
+        	    "-fx-text-fill: #dcddde;"
+        	);
+        	pmCheckBox.setOnAction(e -> {
+        	    String txt = inputField.getText();
+        	    if (pmCheckBox.isSelected()) {
+        	        if (!txt.startsWith("/pm ")) {
+        	            inputField.setText("/pm " + txt);
+        	            inputField.positionCaret(inputField.getText().length());
+        	        }
+        	        mcCheckBox.setSelected(false); 
+        	    } else {
+        	        if (txt.startsWith("/pm ")) {
+        	            inputField.setText(txt.substring(4));
+        	        }
+        	    }
+        	});
+        	mcCheckBox.setOnAction(e -> {
+        	    String txt = inputField.getText();
+        	    if (mcCheckBox.isSelected()) {
+        	        if (!txt.startsWith("/mc ")) {
+        	            inputField.setText("/mc " + txt);
+        	            inputField.positionCaret(inputField.getText().length());
+        	        }
+        	        pmCheckBox.setSelected(false); 
+        	    } else {
+        	        if (txt.startsWith("/mc ")) {
+        	            inputField.setText(txt.substring(4));
+        	        }
+        	    }
+        	});
+
+        	userList.setOnMouseClicked((MouseEvent event) -> {
+        	    String selected = userList.getSelectionModel().getSelectedItem();
+        	    if (selected != null && !selected.isEmpty()) {
+        	        String txt = inputField.getText();
+        	        if (!txt.trim().endsWith(selected)) {
+        	            if (!txt.endsWith(" ") && txt.length() > 0) txt += " ";
+        	            inputField.setText(txt + selected + " ");
+        	            inputField.positionCaret(inputField.getText().length());
+        	        }
+        	    }
+        	});
+
+        
         Label usersLabel = new Label("Online users");
         usersLabel.setStyle(
             "-fx-text-fill: " + accent + ";" +
@@ -87,6 +227,7 @@ public class ChatView extends BorderPane {
             "-fx-cursor: hand;" +
             "-fx-font-weight: 600;"
         );
+ 
         refreshUsersButton.setOnMouseEntered(e -> refreshUsersButton.setStyle(
             "-fx-background-color: " + buttonDarkHover + ";" +
             "-fx-text-fill: " + accent + ";" +
@@ -106,8 +247,37 @@ public class ChatView extends BorderPane {
             "-fx-font-weight: 600;"
         ));
         refreshUsersButton.setPrefWidth(120);
+        createRoomButton.setStyle(
+                "-fx-background-color: " + buttonDark + ";" +
+                "-fx-text-fill: " + accent + ";" +
+                "-fx-font-family: " + font + ";" +
+                "-fx-font-size: 14px;" +
+                "-fx-background-radius: 10;" +
+                "-fx-cursor: hand;" +
+                "-fx-font-weight: 600;"
+            );
+        createRoomButton.setOnMouseEntered(e -> createRoomButton.setStyle(
+                "-fx-background-color: " + buttonDarkHover + ";" +
+                "-fx-text-fill: " + accent + ";" +
+                "-fx-font-family: " + font + ";" +
+                "-fx-font-size: 14px;" +
+                "-fx-background-radius: 10;" +
+                "-fx-cursor: hand;" +
+                "-fx-font-weight: 600;"
+            ));
+        createRoomButton.setOnMouseExited(e -> createRoomButton.setStyle(
+                "-fx-background-color: " + buttonDark + ";" +
+                "-fx-text-fill: " + accent + ";" +
+                "-fx-font-family: " + font + ";" +
+                "-fx-font-size: 14px;" +
+                "-fx-background-radius: 10;" +
+                "-fx-cursor: hand;" +
+                "-fx-font-weight: 600;"
+            ));
+        createRoomButton.setPrefWidth(120);
 
-        VBox usersBox = new VBox(usersLabel, userList, refreshUsersButton);
+
+        VBox usersBox = new VBox(usersLabel, userList, refreshUsersButton,helpButton);
         usersBox.setSpacing(16);
         usersBox.setPadding(new Insets(20, 12, 20, 18));
         usersBox.setPrefWidth(180);
@@ -196,7 +366,7 @@ public class ChatView extends BorderPane {
         ));
         helpButton.setPrefWidth(120);
 
-        VBox rightBox = new VBox(roomsLabel, roomList, refreshRoomsButton, helpButton);
+        VBox rightBox = new VBox(roomsLabel, roomList, refreshRoomsButton, createRoomButton);
         rightBox.setSpacing(16);
         rightBox.setPadding(new Insets(20, 18, 20, 12));
         rightBox.setPrefWidth(180);
@@ -234,7 +404,7 @@ public class ChatView extends BorderPane {
         );
         VBox.setVgrow(messagesArea, Priority.ALWAYS);
 
-        VBox centerBox = new VBox(chatLabel, messagesArea);
+        VBox centerBox = new VBox(chatLabel, messagesArea,clearChatButton);
         centerBox.setSpacing(8);
         centerBox.setPadding(new Insets(24, 0, 16, 0));
         this.setCenter(centerBox);
@@ -283,7 +453,7 @@ public class ChatView extends BorderPane {
             "-fx-cursor: hand;"
         ));
 
-        HBox inputBox = new HBox(12, inputField, sendButton);
+        HBox inputBox = new HBox(12, inputField, pmCheckBox, mcCheckBox, sendButton);
         inputBox.setAlignment(Pos.CENTER);
         inputBox.setPadding(new Insets(14, 0, 0, 0));
         inputBox.setStyle("-fx-background-color: transparent;");
@@ -313,7 +483,7 @@ public class ChatView extends BorderPane {
 
         helpButton.setOnAction(e -> showHelpDialog(font, cardBg, textColor, accent));
     }
-
+ 
     private void showHelpDialog(String font, String bg, String text, String accent) {
         Stage helpStage = new Stage();
         helpStage.setTitle("Chat Help / Uputstvo");
@@ -361,6 +531,8 @@ public class ChatView extends BorderPane {
         vbox.setPadding(new Insets(18));
         vbox.setSpacing(10);
         vbox.setStyle("-fx-background-color: " + bg + "; -fx-background-radius: 14;");
+        
+        
 
         Scene scene = new Scene(vbox, 540, 440);
         helpStage.setScene(scene);

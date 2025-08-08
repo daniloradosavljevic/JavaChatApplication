@@ -75,6 +75,14 @@ public class ChatClient implements Runnable{
                 if (object instanceof InfoMessage) {
                     InfoMessage message = (InfoMessage)object;
                     showMessage("Server:"+message.getTxt());
+                    if (message.getTxt().startsWith("ERROR:")) {
+                        System.out.println(message.getTxt());
+                        if (guiController != null) {
+                            guiController.showUsernameExistsPopup(message.getTxt());
+                        }
+                        return;
+                    }
+
                     return;
                 }
                 
@@ -114,21 +122,12 @@ public class ChatClient implements Runnable{
         if (chatMessage.roomName != null) {
             roomHistories.putIfAbsent(chatMessage.roomName, new ArrayList<>());
             List<ChatMessage> list = roomHistories.get(chatMessage.roomName);
-            if (chatMessage.edited && chatMessage.editedMsgIndex != null && chatMessage.editedMsgIndex > 0 && chatMessage.editedMsgIndex <= list.size()) {
-                list.set(chatMessage.editedMsgIndex - 1, chatMessage);
-            } else {
-                list.add(chatMessage);
-                if (list.size() > HISTORY_LIMIT) list.remove(0);
-            }
+            list.add(chatMessage);
+            if (list.size() > HISTORY_LIMIT) list.remove(0);
         } else {
-            if (chatMessage.edited && chatMessage.editedMsgIndex != null && chatMessage.editedMsgIndex > 0 && chatMessage.editedMsgIndex <= globalHistory.size()) {
-                globalHistory.set(chatMessage.editedMsgIndex - 1, chatMessage);
-            } else {
-                globalHistory.add(chatMessage);
-                if (globalHistory.size() > HISTORY_LIMIT) globalHistory.remove(0);
-            }
+            globalHistory.add(chatMessage);
+            if (globalHistory.size() > HISTORY_LIMIT) globalHistory.remove(0);
         }
-
         String prefix = "";
         if (chatMessage.repliedMsgIndex != null 
                 && chatMessage.repliedMsgUser != null 
@@ -141,12 +140,11 @@ public class ChatClient implements Runnable{
         int number = 0;
         if (chatMessage.roomName != null) {
             List<ChatMessage> list = roomHistories.get(chatMessage.roomName);
-            number = list != null ? list.indexOf(chatMessage) + 1 : 0;
+            number = list != null ? chatMessage.msgNumber : 0;
         } else {
-            number = globalHistory.indexOf(chatMessage) + 1;
+            number = chatMessage.msgNumber;
         }
-        String numStr = (number > 0 ? "#" + number + " " : "");
-
+        String numStr = (chatMessage.msgNumber > 0 ? "#" + chatMessage.msgNumber + " " : "");
         String editedMark = "";
         if (chatMessage.edited && chatMessage.editedMsgIndex != null) {
             editedMark = " (edited #" + chatMessage.editedMsgIndex + ")";
@@ -174,14 +172,7 @@ public class ChatClient implements Runnable{
         System.out.println(txt);
     }
     private void showOnlineUsers(String[] users) {
-        System.out.println("KLIJENT PRIMIO ONLINE: " + java.util.Arrays.toString(users));
         if (guiController != null) guiController.updateUsers(java.util.Arrays.asList(users));
-        System.out.print("Server:");
-        for (int i=0; i<users.length; i++) {
-            String user = users[i];
-            System.out.print(user);
-            System.out.printf((i==users.length-1?"\n":", "));
-        }
     }
     public void sendWhoRequest() {
         client.sendTCP(new rs.raf.pds.v4.z5.messages.WhoRequest());
@@ -290,7 +281,7 @@ public class ChatClient implements Runnable{
                     ChatMessage replied = null;
                     for (List<ChatMessage> list : roomHistories.values()) {
                         for (ChatMessage m : list) {
-                            if (m.getUser().equals(targetUser) && list.indexOf(m) + 1 == idx) {
+                            if (m.getUser().equalsIgnoreCase(targetUser) && m.msgNumber == idx) {
                                 replied = m;
                                 break;
                             }
@@ -298,7 +289,7 @@ public class ChatClient implements Runnable{
                     }
                     if (replied == null) {
                         for (ChatMessage m : globalHistory) {
-                            if (m.getUser().equals(targetUser) && globalHistory.indexOf(m) + 1 == idx) {
+                            if (m.getUser().equalsIgnoreCase(targetUser) && m.msgNumber == idx) {
                                 replied = m;
                                 break;
                             }
@@ -338,20 +329,20 @@ public class ChatClient implements Runnable{
                     String roomName = null;
                     for (Map.Entry<String, List<ChatMessage>> entry : roomHistories.entrySet()) {
                         List<ChatMessage> list = entry.getValue();
-                        if (idx > 0 && idx <= list.size()) {
-                            ChatMessage m = list.get(idx - 1);
-                            if (m.getUser().equals(userName)) {
+                        for (ChatMessage m : list) {
+                            if (m.getUser().equalsIgnoreCase(userName) && m.msgNumber == idx) {
                                 toEdit = m;
                                 roomName = entry.getKey();
                                 break;
                             }
                         }
+                        if (toEdit != null) break;
                     }
                     if (toEdit == null) {
-                        if (idx > 0 && idx <= globalHistory.size()) {
-                            ChatMessage m = globalHistory.get(idx - 1);
-                            if (m.getUser().equals(userName)) {
+                        for (ChatMessage m : globalHistory) {
+                            if (m.getUser().equals(userName) && m.msgNumber == idx) {
                                 toEdit = m;
+                                break;
                             }
                         }
                     }
