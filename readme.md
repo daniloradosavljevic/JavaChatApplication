@@ -1,80 +1,56 @@
-# Quick Chat Commands Guide
+# Quick Chat – Master Project
 
-- **Broadcast message to all users:**
-  ```
-  message_text
-  ```
-
-- **Private message:**
-  ```
-  /pm username message
-  ```
-
-- **Multicast message (to multiple users):**
-  ```
-  /mc user1 user2 ... message
-  ```
+**This is a Java chat application developed as part of master's coursework at the Faculty of Engineering, University of Kragujevac.**  
+The app supports GUI (JavaFX) and simple terminal usage.
 
 ---
 
-## Chat Room Commands
+## GUI Preview
 
-- **Create a chat room:**
-  ```
-  /createroom roomName [invited_user]
-  ```
+<img width="1000" height="779" alt="image" src="https://github.com/user-attachments/assets/95ca403f-1457-47ac-ac19-97421e466ce9" />
 
-- **List all chat rooms:**
-  ```
-  /rooms
-  ```
-
-- **Join a chat room:**
-  ```
-  /joinroom roomName
-  ```
-
-- **Send a message to a room:**
-  ```
-  /room roomName message
-  ```
 
 ---
 
-## Reply and Edit Functionality
+## Terminal Chat Commands
 
-- **Reply to a specific message**  
-  (works for global and room messages; use the global message number as shown in the chat):
-  ```
-  /reply #message_number @username reply_text
-  ```
-  Example:
-  ```
-  /reply #2 @john That's a good point!
-  ```
-  - The reply will be visually marked and refer to the original message.
+When using the terminal version, here are the available commands:
 
-- **Edit your own message**  
-  (works for global and room messages; you can only edit your own messages):
-  ```
-  /edit #message_number new_text
-  ```
-  Example:
-  ```
-  /edit #3 Updated message text
-  ```
-  - Edited messages are marked as `(edited #N)` where `N` is the global number of the edited message.
+- **Send message to all:**  
+  `message_text`
+
+- **Private message:**  
+  `/pm username message`
+
+- **Multicast to multiple users:**  
+  `/mc user1 user2 ... message`
+
+- **Create chat room:**  
+  `/createroom roomName [invited_user]`
+
+- **List chat rooms:**  
+  `/rooms`
+
+- **Join chat room:**  
+  `/joinroom roomName`
+
+- **Send message to a room:**  
+  `/room roomName message`
+
+- **Reply to a message:**  
+  `/reply #message_number @username reply_text`
+
+- **Edit your message:**  
+  `/edit #message_number new_text`
 
 ---
 
-## Automatically Starting Server and 4 Clients
+## Auto-launch (Server + 4 Clients)
 
-To automatically launch the server and 4 users in separate terminals, use the script:
+To start the server and 4 clients automatically (each in a separate terminal window):
 
 ```
 python cmdchat.py
 ```
-
-This will open dedicated terminal windows for the server and each client.
 
 ---
